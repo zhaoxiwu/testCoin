@@ -1,0 +1,237 @@
+pragma solidity ^0.4.16;
+
+contract owned {
+    address public owner;
+
+    function owned() public {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner {
+        require(msg.sender == owner);
+        _;
+    }
+}
+
+contract TokenERC20 {
+    // Public variables of the token
+    string public name;
+    string public symbol;
+    // 18 decimals is the strongly suggested default, avoid changing it
+    uint8 public decimals = 18;
+    
+    uint256 public totalSupply;
+    uint256 internal totalFrozen;
+    uint256 internal frozenTimes = 4;
+    uint256 internal allPersent = 100;
+
+    // This creates an array with all balances
+    mapping (address => uint256) public balanceOf;
+    mapping (address => uint256) public frozenOf;
+    mapping (address => uint256) public unfrozenTimes;
+
+    // This generates a public event on the blockchain that will notify clients
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+
+    /**
+     * Constrctor function
+     *
+     * Initializes contract with initial supply tokens to the creator of the contract
+     */
+    function TokenERC20(
+        uint256 initialSupply,
+        string tokenName,
+        string tokenSymbol
+    ) public {
+        // Update total supply with the decimal amount
+        totalSupply = initialSupply * 10 ** uint256(decimals);  
+        // Set the name for display purposes
+        name = tokenName;     
+        // Set the symbol for display purposes
+        symbol = tokenSymbol;
+        // Init allocation plan
+        _initBalanceAllocation();
+    }
+
+    /**
+     * Internal transfer, only can be called by this contract
+    function _transfer(address _from, address _to, uint _value) internal {
+        // Prevent transfer to 0x0 address. Use burn() instead
+        require(_to != 0x0);
+        // Check if the sender has enough
+        require(balanceOf[_from] >= _value);
+        // Check for overflows
+        require(balanceOf[_to] + _value > balanceOf[_to]);
+        // Save this for an assertion in the future
+        uint previousBalances = balanceOf[_from] + balanceOf[_to];
+        // Subtract from the sender
+        balanceOf[_from] -= _value;
+        // Add the same to the recipient
+        balanceOf[_to] += _value;
+        Transfer(_from, _to, _value);
+        // Asserts are used to use static analysis to find bugs in your code. They should never fail
+        assert(balanceOf[_from] + balanceOf[_to] == previousBalances);
+    }
+    */
+
+    /**
+     * allocation plan, called when publish contract
+     */
+    function _initBalanceAllocation () internal{
+        uint256 totalFrozenPersent = 0;
+        uint256 totalBalanceOf = 0;
+        
+        //for stakes
+        totalFrozenPersent += _setStakeBalance(0x140a200A474e661C8E464A5736866DECf6e4a5ad, 40);
+        //for developers
+        totalFrozenPersent += _setDevelopBalance(0x4F5bfceF8848a877BBCfa5b0391458641775BB58, 30);
+        //for users
+        totalBalanceOf += _setUserBalance(0x4905e6618F34C947F2A7b43cb6eE384C124b45F2, 30); 
+        //make sure 100%
+        require(totalFrozenPersent + totalBalanceOf == allPersent);   
+        // init totalFrozen 
+        totalFrozen = totalSupply * totalFrozenPersent / allPersent;
+        // Set all frozen tokens to owner
+        balanceOf[msg.sender] = totalFrozen;                           
+    }
+    
+    /**
+     *  stakes balances
+     */
+    function _setStakeBalance(address _addr, uint256 persent) internal returns(uint256 per){
+        return _setFrozenOf(_addr, persent);
+    }
+    
+    /**
+     *  developers balances
+     */
+    function _setDevelopBalance(address _addr, uint256 persent) internal returns(uint256 per){
+        return _setFrozenOf(_addr, persent);
+    }
+    
+    /**
+     *  users balances
+     */
+    function _setUserBalance(address _addr, uint256 persent) internal returns(uint256 per){
+        return _setBalanceof(_addr, persent);
+    }
+    
+    /**
+     * set frozen tokens
+     */
+    function _setFrozenOf(address _addr, uint256 persent) internal returns(uint256 per){
+        frozenOf[_addr] = totalSupply * persent /allPersent;
+        unfrozenTimes[_addr] = frozenTimes;  
+        return persent;
+    }
+
+    /**
+     * set no need frozen tokens
+     */
+    function _setBalanceof(address _addr, uint256 persent) internal returns(uint256 per){
+        uint256 _balance = totalSupply * persent /allPersent;
+        //add transfe recode
+        Transfer(msg.sender, _addr, _balance);
+        return persent;
+    }
+}
+
+/******************************************/
+/*       zhaoxiwu  COIN        */
+/******************************************/
+
+contract XiwuCoin is owned, TokenERC20 {
+
+    uint256 public startAt;
+    //uint256 public frozenSplitTime = 1 years;
+    uint256 public frozenSplitTime = 10 minutes;
+    string internal symbol = "XWC";
+    string internal tokenName = "xiwu coin";
+
+
+    /* Initializes contract with initial supply tokens to the creator of the contract */
+    function XiwuCoin(
+        uint256 initialSupply
+    ) TokenERC20(initialSupply, symbol, tokenName) public {
+        startAt = now;
+        frozenTimes = 4;
+    }
+
+   
+    /* Internal transfer, only can be called by this contract */
+    function _transfer(address _from, address _to, uint _value) internal {
+        // Prevent transfer to 0x0 address. Use burn() instead
+        require (_to != 0x0);  
+        // Check value negative
+        require (_value > 0);
+
+        // Check for overflows
+        //require (balanceOf[_to] + _value > balanceOf[_to]); 
+        
+        if(_from == owner){
+            // Check own have enough token
+            require (balanceOf[_from] >= _value);
+            // Check if the sender has enough
+            require(balanceOf[_from] >= totalFrozen + _value); 
+            // Subtract from the sender
+            balanceOf[_from] -= _value;  
+        }
+
+        // Add the same to the recipient
+        //balanceOf[_to] += _value;                          
+        Transfer(_from, _to, _value);
+    }
+    
+    /**
+     * Transfer tokens
+     *
+     * Send `_value` tokens to `_to` from your account
+     *
+     * @param _to The address of the recipient
+     * @param _value the amount to send
+     */
+    function transfer(address _to, uint256 _value) public {
+        _transfer(msg.sender, _to, _value);
+    }
+
+    /**
+     * for user used
+     */
+    function getMyFrozenBalance() public {
+       _unfrozenBalance(msg.sender);
+        
+    }
+    
+    /**
+     * for owner used
+     */
+    function unfrozenBalance(address _to) public onlyOwner {
+        _unfrozenBalance(_to);
+    }
+    
+    /**
+     * for frozen account to get thire tokens 
+     */
+    function _unfrozenBalance(address _to) internal {
+        // Check if the sender has enough
+        require (frozenOf[_to] >= 0); 
+        require (balanceOf[owner] > 0);
+        require (unfrozenTimes[_to] > 0);
+        
+        //get times
+        uint256 gapTime =  (now - startAt) / frozenSplitTime + 1 - (frozenTimes - unfrozenTimes[_to]); 
+        if(gapTime >= frozenTimes){
+            gapTime = 1;
+            unfrozenTimes[_to] = 1;
+        }
+        require(gapTime <= unfrozenTimes[_to]);
+        uint256 _value = frozenOf[_to] *  gapTime / unfrozenTimes[_to]; 
+        require (balanceOf[owner] >= _value);
+        frozenOf[_to] -= _value;
+        totalFrozen -= _value;
+        unfrozenTimes[_to] -= gapTime;
+        _transfer(owner, _to, _value);
+        
+    }
+}
